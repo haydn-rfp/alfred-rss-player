@@ -174,6 +174,9 @@ struct MiniPlayerView: View {
         .padding(14)
         .frame(width: 360)
         .glassEffect(.regular, in: .rect(cornerRadius: 24))
+        .contentShape(.rect(cornerRadius: 24))
+        .gesture(WindowDragGesture())  // drag the player by its background (buttons and scrubber still work)
+        .allowsWindowActivationEvents(true)
         .overlay(alignment: .topTrailing) {
             if local.hovering {
                 HStack(spacing: 4) {

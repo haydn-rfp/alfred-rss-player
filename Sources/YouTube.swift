@@ -15,6 +15,8 @@ final class YouTubeController: NSObject, WKScriptMessageHandler {
     private let hostWindow: NSWindow
     private var ready = false
     private var pending: String?
+    private var active = false  // a video is loaded; the host window only exists on screen while this is true
+    private static let offscreen = NSPoint(x: -5000, y: -5000)
 
     override init() {
         let config = WKWebViewConfiguration()
@@ -24,10 +26,22 @@ final class YouTubeController: NSObject, WKScriptMessageHandler {
         config.userContentController = controller
         webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 480, height: 270), configuration: config)
         webView.setValue(false, forKey: "drawsBackground")
-        hostWindow = NSWindow(contentRect: NSRect(x: -5000, y: -5000, width: 480, height: 270),
+        hostWindow = NSWindow(contentRect: NSRect(origin: Self.offscreen, size: NSSize(width: 480, height: 270)),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         hostWindow.isReleasedWhenClosed = false
+        // Invisible and click-through: macOS moves off-screen windows onto a display when monitors are
+        // connected or disconnected, and this one must never show up as a stray black YouTube box.
+        hostWindow.alphaValue = 0
+        hostWindow.ignoresMouseEvents = true
+        hostWindow.hasShadow = false
+        hostWindow.isOpaque = false
+        hostWindow.backgroundColor = .clear
+        hostWindow.collectionBehavior = [.stationary, .ignoresCycle, .transient]
         super.init()
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.hostWindow.setFrameOrigin(Self.offscreen) }
+        }
         controller.add(self, name: "yt")
         park()
         webView.loadHTMLString(Self.html, baseURL: URL(string: "https://alfredplayer.local/"))
@@ -38,15 +52,23 @@ final class YouTubeController: NSObject, WKScriptMessageHandler {
         webView.removeFromSuperview()
         webView.frame = hostWindow.contentView?.bounds ?? webView.frame
         hostWindow.contentView = webView
-        hostWindow.orderFrontRegardless()
+        hostWindow.setFrameOrigin(Self.offscreen)
+        // Only keep the (invisible) host window around while a video needs to keep playing
+        if active { hostWindow.orderFrontRegardless() } else { hostWindow.orderOut(nil) }
     }
 
     func load(videoID: String, start: Double, rate: Float) {
+        active = true
+        if webView.window === hostWindow || webView.window == nil { park() }
         run("load('\(videoID)', \(start), \(rate))")
     }
     func play() { run("player.playVideo()") }
     func pause() { run("player.pauseVideo()") }
-    func stop() { run("player && player.stopVideo && player.stopVideo()") }
+    func stop() {
+        run("player && player.stopVideo && player.stopVideo()")
+        active = false
+        if webView.window === hostWindow { hostWindow.orderOut(nil) }
+    }
     func seek(to seconds: Double) { run("player.seekTo(\(seconds), true)") }
     func setRate(_ r: Float) { run("player.setPlaybackRate(\(r))") }
 

@@ -38,6 +38,7 @@ final class PanelController {
     private let panel = FloatingPanel()
     private let hosting: NSHostingView<MiniPlayerView>
     private var movingProgrammatically = false
+    private var userDragged = false
 
     /// True once the user has dragged the window away from the menu bar.
     private(set) var detached: Bool {
@@ -55,12 +56,62 @@ final class PanelController {
         NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: hosting, queue: .main) { _ in
             MainActor.assumeIsolated { PanelController.shared.fitToContent() }
         }
+        // A move only counts as the user's when the mouse button is down — macOS also moves windows
+        // itself when displays are connected or disconnected, and those moves mustn't detach it.
         NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: panel, queue: .main) { _ in
             MainActor.assumeIsolated {
                 let c = PanelController.shared
-                if !c.movingProgrammatically, c.panel.isVisible { c.detached = true }
+                if !c.movingProgrammatically, c.panel.isVisible, NSEvent.pressedMouseButtons & 1 != 0 { c.userDragged = true }
             }
         }
+        // When a drag ends: snap back under the icon if dropped near it, otherwise stay where it was put.
+        NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
+            MainActor.assumeIsolated { PanelController.shared.dragEnded() }
+            return event
+        }
+        // Displays connected, disconnected or rearranged: put the window somewhere sensible again.
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {  // let the menu bar settle first
+                MainActor.assumeIsolated { PanelController.shared.screensChanged() }
+            }
+        }
+        // A position saved on a display that's no longer connected
+        if detached && !isOnScreen(panel.frame) { detached = false }
+    }
+
+    private func dragEnded() {
+        guard userDragged else { return }
+        userDragged = false
+        if nearStatusItem() { attachToStatusItem() } else { detached = true; keepOnScreen() }
+    }
+
+    /// Dropped with its top close to the menu-bar icon?
+    private func nearStatusItem() -> Bool {
+        guard let anchor = StatusItemController.shared.iconFrame else { return false }
+        let f = panel.frame
+        return abs(f.maxY - anchor.minY) < 60 && abs(f.midX - anchor.midX) < 160
+    }
+
+    private func screensChanged() {
+        if detached { keepOnScreen() } else { attachToStatusItem() }
+    }
+
+    private func isOnScreen(_ rect: NSRect) -> Bool {
+        NSScreen.screens.contains { $0.visibleFrame.insetBy(dx: -16, dy: -16).contains(rect) }
+    }
+
+    /// Move the window fully onto the screen it's mostly on (or the main screen).
+    private func keepOnScreen() {
+        let f = panel.frame
+        guard !isOnScreen(f) else { return }
+        let screen = NSScreen.screens.max { a, b in
+            a.visibleFrame.intersection(f).width * a.visibleFrame.intersection(f).height <
+            b.visibleFrame.intersection(f).width * b.visibleFrame.intersection(f).height
+        } ?? NSScreen.main
+        guard let v = screen?.visibleFrame else { return }
+        let x = min(max(f.minX, v.minX), v.maxX - f.width)
+        let y = min(max(f.minY, v.minY), v.maxY - f.height)
+        setFrame(NSRect(x: x, y: y, width: f.width, height: f.height))
     }
 
     private func setFrame(_ rect: NSRect) {

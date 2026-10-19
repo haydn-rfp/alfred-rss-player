@@ -14,13 +14,13 @@ It lives in the menu bar. Click the icon and a compact Liquid Glass player drops
 
 * **Podcasts and audio files:** streamed directly with macOS's own player.
 * **YouTube:** plays in a 16:9 panel above the controls using YouTube's official embedded player. Hide the video or the window and the sound keeps going.
-* **One window:** click the menu-bar icon to show or hide it. It opens attached under the icon and floats above other windows.
+* **One window:** click the menu-bar icon to show or hide it. It opens attached under the icon and floats above other windows. Drag it by its background to put it anywhere; drop it back near the icon and it snaps into place.
 * **Controls:** −15s, play/pause, +30s, a scrubber, and playback speed from 0.8× to 2×.
 * **Picks up where you left off** in every episode.
 * **Now Playing:** shows in Control Centre, and works with your keyboard's media keys and AirPods controls.
 * **No Dock icon, no account, no server.**
 
-Right-click the menu-bar icon for Pause/Play, Stop, Attach to Menu Bar and Quit.
+Right-click the menu-bar icon for Pause/Play, Stop, Attach to Menu Bar and Quit. When you connect or disconnect a display, the player reattaches under the icon (or, if you placed it yourself, stays on screen).
 
 ## Requirements
 
@@ -65,7 +65,6 @@ The player writes what's playing to `~/Library/Application Support/Alfred RSS Pl
 
 * Videos whose owners have disabled embedding won't play; open those in the browser instead.
 * Pages that need a login to watch, and Spotify-only episodes (copy-protected), can't be played.
-* Known issue: dragging the window by its background doesn't work yet.
 
 ## Licence
 
